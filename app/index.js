@@ -7,33 +7,37 @@ const upload = multer();
 
 const redis = require('redis');
 
-const {VM, VMScript} = require('vm2');
+const {VM} = require('vm2');
 
-const REDIS_URL = 'redis://:fa6aca251988418c96350d4047a77550@gusc1-clear-seagull-31576.upstash.io:31576';
-const SESSION_SECRET = 'wOlVsEc_sEcR3T_f0r_ch@@l_auT0rA1d3r';
-const FLAG = 'wsc{wRiT!nG_c0d3_t@kE3_t!M3_}';
+const SESSION_SECRET = process.env.REDIS_SECRET || 'secret';
+const FLAG = process.env.FLAG || 'wsc{dummy}';
 
 const NUM_QUESTIONS = 30;
 
-var RedisStore = require('connect-redis')(session)
-var client = redis.createClient({
-    'url': REDIS_URL,
-    legacyMode: true
-});
-
-client.on('connect', () => console.log('Connected to Redis!'));
-client.on('error', (err) => console.log('Redis Client Error', err));
-client.connect().then(() => {});
-
 var app = express()
 
-app.use(session({
-    store: new RedisStore({ client: client }),
+let sessionOptions = {
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: true
-}));
+}
 
+// ------ For running the challenge in Google Cloud with Redis session storage -----
+// Ignore this if running locally
+if(process.env.REDIS_IP) {
+    var RedisStore = require('connect-redis')(session)
+    const client = redis.createClient({
+      "host": process.env.REDIS_IP
+    });
+    client.on('connect', () => console.log('Connected to Redis!'));
+    client.on("error", (error) => console.error('Redis Error: ', error));
+    sessionOptions['store'] = new RedisStore({ client: client });
+}
+// ----------------------------------------------------------------------------------
+
+app.use(session(sessionOptions));
+
+// Make sure correct answers always exist in session
 app.use((req, res, next) => {
     if(!req.session.answers) {
         req.session.answers = generateAnswers();
@@ -42,7 +46,6 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static('public'));
-app.use(express.static('project'));
 
 // for parsing application/json
 app.use(bodyParser.json()); 
@@ -98,7 +101,7 @@ app.post('/upload', async (req, res, next) => {
 });
 
 app.get('/grade', async (req, res, next) => {
-    if(req.session.pass ?? false) {
+    if(req.session.pass || false) {
         res.send('Tests passed! Here is the flag: ' + FLAG);
     } else {
         req.session.answers = generateAnswers();
@@ -108,7 +111,7 @@ app.get('/grade', async (req, res, next) => {
 
 function generateAnswers() {
     answers = {
-        'person': Math.floor(Math.random() * 7753000),
+        'person': Math.floor(Math.random() * 7753000), // Random person in the world
         'responses': []
     };
     for(let i = 0; i < NUM_QUESTIONS; i++) {
@@ -136,6 +139,6 @@ function testCode(vm, code, person, questionNumber, correct) {
     return ret;
 }
 
-app.listen(8080, function () {
-    console.log('Autograder server listening on port 8080!');
+app.listen(80, function () {
+    console.log('Autograder server listening on port 80!');
 });

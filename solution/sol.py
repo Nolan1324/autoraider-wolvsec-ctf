@@ -1,6 +1,6 @@
 import requests
 
-url_base = 'http://localhost:8080/'
+url_base = 'https://autoraider-bvel4oasra-uc.a.run.app/'
 
 s = requests.Session()
 
